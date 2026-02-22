@@ -20,8 +20,7 @@ class BaseWebLinkFinder(BaseConfigsCombined):
     def _render_query_yml(self,
                           contestant_main: str | None = None,
                           ):
-        print(f"setup called for class {self.__class__.__name__}")
-        with open(self.fns.query_metadata, "r") as f:
+        with open(self.filns.query_metadata, "r") as f:
             self.category_prompts = Template(f.read())
         rendered = self.category_prompts.render(
             CONTESTANT_MAIN=contestant_main,

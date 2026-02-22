@@ -1,9 +1,10 @@
 
 
-from utils.application_init.config_variables.file_names import FileNames
+from utils.application_init.config_variables.file_names import DirectoryNames, FileNames
 
 
 class BaseConfigsCombined(
 ):
     def __init__(self):
-        self.fns = FileNames()
+        self.filns = FileNames()
+        self.dirns = DirectoryNames()

@@ -756,7 +756,7 @@ DEFAULT_QUESTION = (
     "Provide a detailed, evidence-based prediction."
 )
 
-def main(md_dir: str, question_prompt: str, save_dir: str):
+def main(md_dir: str, question_prompt: str, save_dir: str, match_metadata: dict[str, str | dict] | None = None):
     parser = argparse.ArgumentParser(
         description="Feed markdown files into an LLM reasoning pipeline",
         formatter_class=argparse.RawTextHelpFormatter
@@ -855,11 +855,12 @@ def main(md_dir: str, question_prompt: str, save_dir: str):
     _save_report(report, report_path, conclusion_path)
     
     if isinstance( output_result, dict):
-        with open(result_path, "w", encoding="utf-8") as f:
-            json.dump(output_result, f, indent=2)
+        match_metadata["custom_prediction"] = output_result
     else:
-        with open(result_path, "w", encoding="utf-8") as f:
-            f.write(output_result)
+        output_result = {"error_output": str(output_result)}
+        match_metadata["custom_prediction"] = output_result
+    with open(result_path, "w", encoding="utf-8") as f:
+        json.dump(match_metadata, f, indent=2)
 
     if RICH:
         console.print(f"\n[dim]📄 Full report saved to: {report_path}[/dim]")

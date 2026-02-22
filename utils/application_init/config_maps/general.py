@@ -9,12 +9,14 @@ class QueryMetadata:
 
 @dataclass
 class MatchupInfo:
+    contestant_names: str
     contestant_home: str
     contestant_away: str
     start_time_aest: str
     competition_name: str
     tournament_name: str | None
     sport_name: str
+    match_name: str
     
     
     
