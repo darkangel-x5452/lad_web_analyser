@@ -1,0 +1,8 @@
+
+ddgs # formerly duckduckgo_search
+requests
+beautifulsoup4
+sumy
+nltk
+groq   # optional, for AI-powered answers
+numpy

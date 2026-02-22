@@ -1,0 +1,21 @@
+# WebVision Analyzer — Free Version Dependencies
+# All tools are free and open source. No credit card needed.
+#
+# Install everything:
+#   pip install -r requirements_free.txt
+#   playwright install chromium
+#
+# ─── Core (always required) ───────────────────────────────────────────────────
+playwright>=1.44.0      # Headless Chromium browser — renders JS-heavy pages
+pillow>=10.0.0          # Image resize and JPEG compression
+#
+# ─── Provider A: Google Gemini (free cloud, just a Google account) ───────────
+# Get a free API key (no card) at: https://aistudio.google.com
+google-generativeai>=0.7.0
+#
+# ─── Provider B: Ollama (fully local, zero account, zero internet) ────────────
+# Install Ollama app from: https://ollama.com
+# Then pull a vision model: ollama pull llava
+#                           ollama pull llama3.2-vision:11b   (better)
+#                           ollama pull moondream              (lightweight)
+ollama>=0.3.0

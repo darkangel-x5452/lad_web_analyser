@@ -647,7 +647,7 @@ def choose_provider(force: Optional[str] = None) -> object:
 async def run_session(url: str, provider, save_shots: bool = True):
     """Capture → extract → Q&A loop for one URL."""
 
-    save_dir = Path("data/screenshots") if save_shots else None
+    save_dir = Path("webpage_analyser/data/screenshots") if save_shots else None
     cap      = await capture(url, save_dir=save_dir)
     sess     = Session(capture=cap, provider=provider)
     analysis = sess.extract()
