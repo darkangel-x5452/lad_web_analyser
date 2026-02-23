@@ -40,21 +40,19 @@ class SerpApiFinder(BaseWebLinkFinder):
         self.contenstant_away = self.matchup_info.contestant_away
         self.date = self.matchup_info.start_time_aest
         self.match_name = self.matchup_info.match_name
-        self.match_name_shrt = re.sub(r'[^A-Za-z0-9/]', '', self.match_name)
+        self.match_name_shrt = re.sub(r"[^A-Za-z0-9/]", "", self.match_name)
         self.match_name_shrt = self.match_name_shrt.replace("/", "_")
         self.tournament_name = self.matchup_info.tournament_name
         self.date_day = self.date.split("T")[0].replace("-", "")
         self.query_suffix = f"For the sport '{self.matchup_info.sport_name}' and competition '{self.matchup_info.competition_name}'."
         self.env = env
-        
+
         self.date_dir = f"{self.dirns.serpapi_results}/{self.env}/{self.date_day}"
         self.match_dir = f"{self.dirns.serpapi_results}/{self.env}/{self.date_day}/{self.match_name_shrt}"
 
-        
-
     def get_match_dir(self) -> str:
         return self.match_dir
-    
+
     def get_links_and_markdown(
         self, query: str, query_type: str, contestant_location: str | None = None
     ) -> None:
@@ -81,7 +79,9 @@ class SerpApiFinder(BaseWebLinkFinder):
         resp = requests.get(f"https://serpapi.com/search.json", params=params)
         resp_jn = resp.json()
         if "reconstructed_markdown" not in resp_jn:
-            print(f"{YELLOW}Warning: 'reconstructed_markdown' not found in SerpAPI response for query: '{self.match_name}', '{query_type_new}'. Skipping markdown generation.{RESET}")
+            print(
+                f"{YELLOW}Warning: 'reconstructed_markdown' not found in SerpAPI response for query: '{self.match_name}', '{query_type_new}'. Skipping markdown generation.{RESET}"
+            )
             return None
         ai_markdown = resp_jn["reconstructed_markdown"]
         ai_markdown = md_header_1 + ai_markdown
@@ -116,7 +116,9 @@ class SerpApiFinder(BaseWebLinkFinder):
 
     def main(self) -> None:
         if os.path.exists(self.match_dir):
-            print(f"{YELLOW}Warning: Match directory '{self.match_dir}' already exists. Skipping link finding for this match to avoid overwriting existing data.{RESET}")
+            print(
+                f"{YELLOW}Warning: Match directory '{self.match_dir}' already exists. Skipping link finding for this match to avoid overwriting existing data.{RESET}"
+            )
             return None
         os.makedirs(self.match_dir, exist_ok=True)
         self.get_contestant_info(self.contenstant_home, "home")
@@ -162,7 +164,9 @@ if __name__ == "__main__":
         tournament_name = _match.get("tournamentName", None)
         sport_name = _match["sport_name"]
         if sport_name.lower() != "basketball":
-            print(f"{YELLOW}Skipping match '{_match['match_name']}' due to unsupported sport '{sport_name}'.{RESET}")
+            print(
+                f"{YELLOW}Skipping match '{_match['match_name']}' due to unsupported sport '{sport_name}'.{RESET}"
+            )
             continue
         matchup_info = {
             "contestant_home": _match["contestants"][0]["full_name"],
@@ -178,5 +182,7 @@ if __name__ == "__main__":
         saf.main()
         match_dir = saf.get_match_dir
         match_dirs.append(match_dir)
-    print(f"{GREEN}Finished processing matches. Data saved in the following directories:{RESET}")
+    print(
+        f"{GREEN}Finished processing matches. Data saved in the following directories:{RESET}"
+    )
     print("bye analyser")

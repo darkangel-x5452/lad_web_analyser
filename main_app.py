@@ -9,6 +9,7 @@ from utils.logger import logger
 
 _logger = logger(__name__)
 
+
 class MainAppRunner:
     def __init__(self):
         self.env = "prod"
