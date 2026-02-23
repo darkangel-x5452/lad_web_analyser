@@ -50,8 +50,7 @@ class SerpApiFinder(BaseWebLinkFinder):
         self.date_dir = f"{self.dirns.serpapi_results}/{self.env}/{self.date_day}"
         self.match_dir = f"{self.dirns.serpapi_results}/{self.env}/{self.date_day}/{self.match_name_shrt}"
 
-
-        os.makedirs(self.match_dir, exist_ok=True)
+        
 
     def get_match_dir(self) -> str:
         return self.match_dir
@@ -119,6 +118,7 @@ class SerpApiFinder(BaseWebLinkFinder):
         if os.path.exists(self.match_dir):
             print(f"{YELLOW}Warning: Match directory '{self.match_dir}' already exists. Skipping link finding for this match to avoid overwriting existing data.{RESET}")
             return None
+        os.makedirs(self.match_dir, exist_ok=True)
         self.get_contestant_info(self.contenstant_home, "home")
         self.get_contestant_info(self.contenstant_away, "away")
         self.get_match_info()
@@ -141,8 +141,8 @@ class SerpApiFinder(BaseWebLinkFinder):
     def get_match_info(self) -> None:
         self._render_query_yml()
         all_statistics = {
-            "match_statistics": self.qm.match_statistics,
-            "match_commentary": self.qm.match_commentary,
+            "match_statistics_and_commentary": self.qm.match_statistics_and_commentary,
+            # "match_commentary": self.qm.match_commentary,
         }
         for _key, _stat in all_statistics.items():
             new_query = self.query_suffix.strip() + _stat

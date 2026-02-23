@@ -4,7 +4,10 @@ import os
 from reasoning_model.v2.md_reasoning_engine import main
 from utils.application_init.config_maps.general import MatchupInfo
 from weblink_finder.serpapi.run_app import SerpApiFinder
+from utils.logger import logger
 
+
+_logger = logger(__name__)
 
 class MainAppRunner:
     def __init__(self):
@@ -81,4 +84,6 @@ def run_app():
 
 
 if __name__ == "__main__":
+    _logger.info("Starting main application runner...")
     run_app()
+    _logger.info("Finished main application runner...")

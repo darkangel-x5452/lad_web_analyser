@@ -4,7 +4,7 @@ from dataclasses import dataclass
 class QueryMetadata:
     team_statistics: str | None
     player_statistics: str | None
-    match_statistics: str | None
+    match_statistics_and_commentary: str | None
     match_commentary: str | None
 
 @dataclass
