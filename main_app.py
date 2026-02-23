@@ -69,6 +69,11 @@ class MainAppRunner:
             save_dir = (
                 f"data/reasoning_engine/results/{self.env}/{date_dir}/{match_name}"
             )
+            if os.path.exists(f"{save_dir}/reasoning_result.json"):
+                print(
+                    f"Skipping reasoning for match '{match_name}' as results already exist in '{save_dir}'. Otherwise the result will be overwritten."
+                )
+                continue
             os.makedirs(save_dir, exist_ok=True)
             main(
                 md_dir=md_dir,
