@@ -129,12 +129,13 @@ GROQ_DEFAULT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # GOOD RESULTS:
 # UNTESTED RESULTS:
-OLLAMA_DEFAULT_MODEL = "llama3.2-vision"
+# OLLAMA_DEFAULT_MODEL = "llama3.2-vision"
 # OLLAMA_DEFAULT_MODEL="granite3.2-vision:2b" # Takes long time
 # OLLAMA_DEFAULT_MODEL = "qwen3-vl:8b"  # Takes a while
 # OLLAMA_DEFAULT_MODEL = "glm-ocr:bf16"
-# OLLAMA_DEFAULT_MODEL="qwen3-vl:235b-cloud"
-# OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud"
+OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud"
+# OLLAMA_DEFAULT_MODEL = "gpt-oss:120b-cloud"
+# OLLAMA_DEFAULT_MODEL = "gpt-oss:120b"
 # OLLAMA_DEFAULT_MODEL = "qwen3.5:397b-cloud"
 # InternVL2-8B
 # qwen2.5-vl-72b-instruct
@@ -497,35 +498,6 @@ def capture_screenshot_mobile(url: str, output_path: str) -> str:
     finally:
         driver.quit()
 
-    # with sync_playwright() as pw:
-    #     browser = pw.chromium.launch(headless=True)
-    #     page = browser.new_page(
-    #         viewport={"width": SCREENSHOT_WIDTH, "height": SCREENSHOT_HEIGHT},
-    #         # Mimic a real browser so sites don't block headless agents
-    #         user_agent=(
-    #             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    #             "AppleWebKit/537.36 (KHTML, like Gecko) "
-    #             "Chrome/120.0.0.0 Safari/537.36"
-    #         ),
-    #     )
-    #     # Block common ad/tracker patterns for a cleaner render
-    #     page.route(
-    #         "**/{ads,analytics,tracking,doubleclick,googlesyndication}**",
-    #         lambda route: route.abort(),
-    #     )
-    #     page.goto(url, wait_until="networkidle", timeout=30_000)
-    #     # Scroll to bottom to trigger lazy-loaded content
-    #     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-    #     page.wait_for_timeout(1_500)
-
-    #     page.screenshot(path=output_path, full_page=True)
-    #     browser.close()
-
-    # kb = Path(output_path).stat().st_size / 1024
-    # print(f"    Screenshot saved -> {output_path}  ({kb:.1f} KB)")
-    # return output_path
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2 – Resize to stay within model upload limits
 # ─────────────────────────────────────────────────────────────────────────────
@@ -661,6 +633,49 @@ def query_ollama(
     )
     return response["message"]["content"]
 
+def query_ollama_cloud(
+    image_path: str,
+    query: str,
+    model: str = OLLAMA_DEFAULT_MODEL,
+    host: str = OLLAMA_DEFAULT_HOST,
+) -> str:
+    """
+    Send the screenshot to a locally running Ollama vision model.
+
+    Pull a model first, e.g.:
+        ollama pull llama3.2-vision   (recommended, default)
+        ollama pull llava
+        ollama pull moondream
+    """
+    import os
+    from ollama import Client
+
+    client = Client(
+        host="https://ollama.com",
+        headers={'Authorization': 'Bearer ' + os.environ.get('OLLAMA_API_KEY')}
+    )
+
+    if host != OLLAMA_DEFAULT_HOST:
+        os.environ["OLLAMA_HOST"] = host
+
+    print(f"{datetime.now()}, [2/3] Querying Ollama (model={model}, host={host})...")
+    b64 = _to_base64(image_path)
+    messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"{SYSTEM_PROMPT}\n\n"
+                    f"Query: {query}\n\n"
+                    "Extract the relevant information from the attached webpage screenshot."
+                ),
+                "images": [b64],
+            }
+        ]
+
+    for part in client.chat(model, messages=messages, stream=True):
+        print(part['message']['content'], end='', flush=True)
+    # return response["message"]["content"]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
@@ -727,6 +742,10 @@ def extract_from_webpage(
         markdown = query_ollama(
             ready_img, query, model=ollama_model, host=ollama_host
         )
+    elif backend == "ollama_cloud":
+        markdown = query_ollama_cloud(
+            ready_img, query, model=ollama_model, host=ollama_host
+        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
@@ -753,68 +772,6 @@ def main(
     keep_screenshot: bool = False,
     prepare_image_flg: bool = False,
 ) -> None:
-    # parser = argparse.ArgumentParser(
-    #     description=(
-    #         "Extract query-relevant info from a webpage screenshot using "
-    #         "open-source vision LLMs (Groq cloud or local Ollama)."
-    #     ),
-    #     formatter_class=argparse.RawDescriptionHelpFormatter,
-    #     epilog="""
-    # Examples:
-    #   # Groq – medal table from Wikipedia
-    #   python webpage_query_extractor.py \\
-    #       --url   "https://en.wikipedia.org/wiki/2024_Summer_Olympics_medal_table" \\
-    #       --query "Get the medal count table"
-
-    #   # Groq – alternative model
-    #   python webpage_query_extractor.py \\
-    #       --url         "https://www.nba.com/stats/teams/traditional" \\
-    #       --query       "Team statistics table" \\
-    #       --groq-model  "llama-3.2-90b-vision-preview"
-
-    #   # Ollama – fully local
-    #   python webpage_query_extractor.py \\
-    #       --url          "https://www.bbc.com/sport/football" \\
-    #       --query        "Latest football scores" \\
-    #       --backend      ollama \\
-    #       --ollama-model llava
-
-    #   # Save output to Markdown file
-    #   python webpage_query_extractor.py --url ... --query ... --output results.md
-    # """,
-    # )
-
-    # parser.add_argument("--url",    required=True, help="Webpage URL to analyse")
-    # parser.add_argument("--query",  required=True, help="What information to extract")
-    # parser.add_argument("--output", default=None,  help="Save Markdown output to this file")
-    # parser.add_argument("--keep-screenshot", action="store_true",
-    #                     help="Keep the temporary screenshot PNG on disk for inspection")
-
-    # # ── Backend ────────────────────────────────────────────────────────────────
-    # bg = parser.add_argument_group("Backend")
-    # bg.add_argument(
-    #     "--backend", default="groq", choices=["groq", "ollama"],
-    #     help="'groq' = free Llama cloud API (default) | 'ollama' = local model",
-    # )
-
-    # # ── Groq options ───────────────────────────────────────────────────────────
-    # gg = parser.add_argument_group("Groq options (--backend groq)")
-    # gg.add_argument("--api-key",    default=None,
-    #                 help="Groq API key (or set GROQ_API_KEY env var)")
-    # gg.add_argument("--groq-model", default=GROQ_DEFAULT_MODEL,
-    #                 help=f"Groq model name (default: {GROQ_DEFAULT_MODEL})\n"
-    #                      "  llama-3.2-11b-vision-preview  – lighter / fastest\n"
-    #                      "  llama-3.2-90b-vision-preview  – most accurate")
-
-    # # ── Ollama options ─────────────────────────────────────────────────────────
-    # og = parser.add_argument_group("Ollama options (--backend ollama)")
-    # og.add_argument("--ollama-model", default=OLLAMA_DEFAULT_MODEL,
-    #                 help=f"Ollama model (default: {OLLAMA_DEFAULT_MODEL})\n"
-    #                      "  llava, llava:13b, moondream, bakllava")
-    # og.add_argument("--ollama-host", default=OLLAMA_DEFAULT_HOST,
-    #                 help=f"Ollama server URL (default: {OLLAMA_DEFAULT_HOST})")
-
-    # args = parser.parse_args()
 
     result = extract_from_webpage(
         url=url_input,
