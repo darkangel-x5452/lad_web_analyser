@@ -504,12 +504,12 @@ def capture_screenshot_mobile(url: str, output_path: str) -> str:
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
     devices = [
-        "iphone_14_pro_max",
+        # "iphone_14_pro_max",
         "ipad_pro",
-        "samsung_galaxy_s23",
-        "pixel_7",
-        "desktop_4k",
-        "desktop_1920",
+        # "samsung_galaxy_s23",
+        # "pixel_7",
+        # "desktop_4k",
+        # "desktop_1920",
     ]
     # device_used = devices[0]
     try:
@@ -517,6 +517,8 @@ def capture_screenshot_mobile(url: str, output_path: str) -> str:
             # screenshot = screenshot_scroll(_device, url, driver)
             screenshot = screenshot_no_scroll(_device, url, driver)
             with open(f"{output_path}_{_device}.png", "wb") as file:
+                file.write(screenshot)
+            with open(f"{output_path}", "wb") as file:
                 file.write(screenshot)
 
             print(f"[✓] Full-page screenshot saved → {output_path}")
@@ -751,44 +753,75 @@ def main(
     if output_file:
         Path(output_file).write_text(result, encoding="utf-8")
         print(f"\nSaved -> {output_file}")
+    
+    print("Load json output")
+    output_jn = json.loads(result)
+    win_team = output_jn["win_team"]
+    lose_team = output_jn["lose_team"]
+
+    result_jn = {
+        "url": url_input,
+        "model_name": ollama_model,
+        "model_response": output_jn,
+    }
+
+
+    with open(f"data/webpage_analyser/v6/prod/{win_team}_vs_{lose_team}.json", "w", encoding="utf-8") as f:
+        json.dump(result_jn, f, ensure_ascii=False, indent=4)
+    print("bye")
+
+
 
 def run_app():
     models = [
-        # "gemma3:12b",
-        "glm-ocr:bf16",
-        "granite3.2-vision:2b",
-        "llama3.2-vision:11b-instruct-q4_K_M",
-        "llama3.2-vision:11b",
-        "llava:13b",
-        "minicpm-v:8b",
-        "qwen3-vl:8b",
-        "gemma3:12b-it-q8_0",
-        "llava:7b-v1.6-mistral-q8_0",
-        "llama3.2-vision:11b-instruct-q4_K_M",
-        "qwen3-vl:8b-instruct-q8_0",
-        "llava-llama3:8b",
-        "gemma3:4b-it-fp16",
-        "gemma3:12b-it-qat",
-        "gemma3:12b-it-q4_K_M",
-        "qwen3-vl:4b-instruct-bf16",
-        "qwen3-vl:4b-thinking-bf16",
-        "qwen3-vl:8b-thinking-q8_0",
-        "gpt-oss:120b",
+        # "llama3.2-vision:11b-instruct-q4_K_M",  # 53.65, 29.17, 58.68, 40.24
+        # "llama3.2-vision:11b",  # 38.56, 130.67, 100.29, 76.74
+        "qwen3-vl:8b-instruct-q8_0",  # 25.50, 24.36, 41.38, 51.67
     ]
+    # PASSING MODELS WITH SPEED SECONDS
+
+    ## Best Results:
+
+    ## DECENT RESULTS, NOT AS MUCH DETAIL
+    # "granite3.2-vision:2b", # 10.92, 19.86
+    # "qwen3-vl:8b", # 27.72, 20.74
+    # "qwen3-vl:8b-thinking-q8_0",  # 54.19, 67.84, 106.44, 292.41
+
+    # CRAP MODELS
+    # "gemma3:12b", # 14.46
+    # "gemma3:12b-it-q8_0",
+    # "gemma3:4b-it-fp16",
+    # "glm-ocr:bf16",
+    # "llava-llama3:8b",
+    # "llava:13b",
+    # "llava:7b-v1.6-mistral-q8_0",
+    # "minicpm-v:8b",
+
+    # NOT DONE
+    # "gemma3:12b-it-q4_K_M", # not done
+    # "gemma3:12b-it-qat", # not done
+    # "gpt-oss:120b", # not done
+    # "qwen3-vl:4b-instruct-bf16", # not done
+    # "qwen3-vl:4b-thinking-bf16", # not done
 
     # OLLAMA_DEFAULT_MODEL = "gpt-oss:120b-cloud"
     # OLLAMA_DEFAULT_MODEL = "qwen3.5:397b-cloud"
     # OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud" # Good but uses cloud
     for _model in models:
+        start_time = datetime.now()
         clean_model_name = re.sub(r"[^A-Za-z0-9\-\.]", "_", _model)
         main(
             url_input=os.getenv("DEMO_URL_LINK"),
             query_input=os.getenv("DEMO_URL_QUERY"),
-            output_file=f"data/webpage_analyser/v6/demo_output_free_image_{clean_model_name}.md",
+            output_file=f"data/webpage_analyser/v6/genai_markdowns/demo_output_free_image_{clean_model_name}.md",
             keep_screenshot=True,
             prepare_image_flg=False,
             ollama_model=_model,
         )
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        print(f"MODEL '{_model}' COMPLETED IN {duration:.2f} SECONDS.\n")
+
 
 if __name__ == "__main__":
     run_app()
