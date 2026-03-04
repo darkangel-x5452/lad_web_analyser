@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
+import json
 import os
 import re
 import sys
@@ -92,15 +93,6 @@ except ImportError:
 
 
 # ── Lazy imports for optional backends ───────────────────────────────────────
-def _import_groq():
-    try:
-        from groq import Groq
-
-        return Groq
-    except ImportError:
-        sys.exit("Missing dependency for Groq backend.\n  Run: pip install groq")
-
-
 def _import_ollama():
     try:
         import ollama
@@ -114,26 +106,38 @@ def _import_ollama():
 SCREENSHOT_WIDTH = 1440
 SCREENSHOT_HEIGHT = 900
 
-# Groq: open-source Meta Llama vision models served free via Groq Cloud
-GROQ_DEFAULT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-# Alternative Groq models:
-#   "llama-3.2-11b-vision-preview"   – lighter, very fast
-#   "llama-3.2-90b-vision-preview"   – larger, more accurate
+
+TEMPERATURE = (
+    0.1  # Low = more factual / exact output, High = more creative / varied output
+)
 
 # Ollama: locally running model
 # https://benchmarking.nanonets.com/
 # BAD RESULTS:
-# OLLAMA_DEFAULT_MODEL = "llava:13b" #  I'm unable to view images or perform tasks that involve visual analysis of webpages. However, if you provide me with the query and any relevant data points, I can help you structure them into a Markdown table format.
-# OLLAMA_DEFAULT_MODEL="gemma3:12b" # bad results
-# OLLAMA_DEFAULT_MODEL="minicpm-v:8b" # bad results
+OLLAMA_DEFAULT_MODEL = "gemma3:12b"  # bad results
+# OLLAMA_DEFAULT_MODEL = "glm-ocr:bf16" # bad results
+# OLLAMA_DEFAULT_MODEL = "granite3.2-vision:2b" # bad results
+# OLLAMA_DEFAULT_MODEL = "llama3.2-vision:11b-instruct-q4_K_M" # Too long
+# OLLAMA_DEFAULT_MODEL = "llama3.2-vision:11b" # Too long
+# OLLAMA_DEFAULT_MODEL = "llava:13b" # bad results
+# OLLAMA_DEFAULT_MODEL = "minicpm-v:8b" # bad results
+# OLLAMA_DEFAULT_MODEL = "qwen3-vl:8b"  # bad results
+# OLLAMA_DEFAULT_MODEL = "gemma3:12b-it-q8_0"
+# OLLAMA_DEFAULT_MODEL = "llava:7b-v1.6-mistral-q8_0"
+# OLLAMA_DEFAULT_MODEL = "llama3.2-vision:11b-instruct-q4_K_M" # Too long
+# OLLAMA_DEFAULT_MODEL = "qwen3-vl:8b-instruct-q8_0" # bad results
+# OLLAMA_DEFAULT_MODEL = "llava-llama3:8b"
 
 # GOOD RESULTS:
+# OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud" # Good but uses cloud
+
 # UNTESTED RESULTS:
-# OLLAMA_DEFAULT_MODEL = "llama3.2-vision"
-# OLLAMA_DEFAULT_MODEL="granite3.2-vision:2b" # Takes long time
-# OLLAMA_DEFAULT_MODEL = "qwen3-vl:8b"  # Takes a while
-# OLLAMA_DEFAULT_MODEL = "glm-ocr:bf16"
-OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud"
+# OLLAMA_DEFAULT_MODEL = "gemma3:4b-it-fp16"
+# OLLAMA_DEFAULT_MODEL = "gemma3:12b-it-qat"
+# OLLAMA_DEFAULT_MODEL = "gemma3:12b-it-q4_K_M"
+# OLLAMA_DEFAULT_MODEL = "qwen3-vl:4b-instruct-bf16"
+# OLLAMA_DEFAULT_MODEL = "qwen3-vl:4b-thinking-bf16"
+# OLLAMA_DEFAULT_MODEL = "qwen3-vl:8b-thinking-q8_0"
 # OLLAMA_DEFAULT_MODEL = "gpt-oss:120b-cloud"
 # OLLAMA_DEFAULT_MODEL = "gpt-oss:120b"
 # OLLAMA_DEFAULT_MODEL = "qwen3.5:397b-cloud"
@@ -150,77 +154,11 @@ OLLAMA_DEFAULT_HOST = "http://localhost:11434"
 #   "bakllava"     – Mistral + LLaVA
 
 # Shared extraction prompt for all backends
-SYSTEM_PROMPT = (
-    "You are a precise information-extraction assistant.\n"
-    "You are given a screenshot of information and a user query.\n\n"
-    "Your job:\n"
-    "1. Find ONLY the information directly relevant to the query.\n"
-    "2. Reproduce tables as proper Markdown tables "
-    "   (| header | cols | with a --- separator row).\n"
-    "3. Reproduce other relevant information as proper Markdown format."
-    "   (| header | cols | with a --- separator row).\n"
-    "4. Use appropriate Markdown: ## headings, **bold** for labels, "
-    "   bullet lists when needed.\n"
-    "5. Ignore navigation bars, ads, site headers, footers, cookie banners, "
-    "   'next match' widgets, subscription prompts, social media buttons, "
-    "   and anything else NOT directly related to the query.\n"
-    "6. If multiple sections match the query, include all with clear Markdown headings.\n"
-    "7. Output ONLY the extracted Markdown — no preamble, no disclaimers, no filler text."
-)
+with open("configs/prompts/system_matchup_predictor.txt", "r") as f:
+    SYSTEM_PROMPT = f.read()
 
-DEVICES = {
-    # --- Desktop ---
-    "desktop_4k": {
-        "width": 3840,
-        "height": 2160,
-        "deviceScaleFactor": 1.0,
-        "mobile": False,
-        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "platform": "Linux",
-    },
-    "desktop_1920": {
-        "width": 1920,
-        "height": 1080,
-        "deviceScaleFactor": 1.0,
-        "mobile": False,
-        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "platform": "Linux",
-    },
-    # --- Tablet ---
-    "ipad_pro": {
-        "width": 1024,
-        "height": 1366,
-        "deviceScaleFactor": 2.0,
-        "mobile": False,
-        "userAgent": "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-        "platform": "iPad",
-    },
-    # --- Mobile ---
-    "iphone_14_pro_max": {
-        "width": 430,
-        "height": 932,
-        "deviceScaleFactor": 3.0,
-        "mobile": True,
-        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-        "platform": "iPhone",
-    },
-    "samsung_galaxy_s23": {
-        "width": 393,
-        "height": 851,
-        "deviceScaleFactor": 3.0,
-        "mobile": True,
-        "userAgent": "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        "platform": "Android",
-    },
-    "pixel_7": {
-        "width": 412,
-        "height": 915,
-        "deviceScaleFactor": 2.625,
-        "mobile": True,
-        "userAgent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        "platform": "Android",
-    },
-}
+with open("configs/devices/devices_settings.json", "r") as f:
+    DEVICES = json.load(f)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -270,7 +208,7 @@ def capture_screenshot_desktop(url: str, output_path: str) -> str:
     Launch headless Chromium, load `url`, scroll to trigger lazy content,
     and save a full-page PNG to `output_path`.
     """
-    print(f"[1/3] Capturing screenshot: {url}")
+    print(f"{datetime.now()}, [1/3] Capturing screenshot: {url}")
 
     chrome_options = ChromeOptions()
 
@@ -346,13 +284,193 @@ def capture_screenshot_desktop(url: str, output_path: str) -> str:
         with open(output_path, "wb") as file:
             file.write(screenshot)
 
-        print(f"[✓] Full-page screenshot saved → {output_path}")
+        print(f"{datetime.now()}, [✓] Full-page screenshot saved → {output_path}")
         print(f"    Page dimensions: {total_width}px wide × {total_height}px tall")
 
     finally:
         driver.quit()
 
     return output_path
+
+
+def screenshot_no_scroll(device_input: str, url: str, driver) -> bytes:
+    print(f"\n--- Emulating device: {device_input} ---")
+    device_used = device_input
+    driver.get(url)
+    emulate_device(driver, device_used)
+
+    # Refresh so the site re-renders fully with the emulated device
+    driver.refresh()
+    time.sleep(3)
+
+    # --- Remove ad containers ---
+    driver.execute_script(
+        """
+            const adSelectors = [
+                'iframe',
+                '[id*="ad"]',       '[class*="ad"]',
+                '[id*="banner"]',   '[class*="banner"]',
+                '[id*="sponsor"]',  '[class*="sponsor"]',
+                '.advertisement',   '.adsbygoogle',
+                'ins.adsbygoogle'
+            ];
+            adSelectors.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => el.remove());
+            });
+        """
+    )
+
+    # --- Measure true full page dimensions ---
+    full_width = driver.execute_script(
+        """
+            return Math.max(
+                document.body.scrollWidth,
+                document.body.offsetWidth,
+                document.documentElement.scrollWidth,
+                document.documentElement.offsetWidth,
+                document.documentElement.clientWidth
+            );
+        """
+    )
+    full_height = driver.execute_script(
+        """
+            return Math.max(
+                document.body.scrollHeight,
+                document.body.offsetHeight,
+                document.documentElement.scrollHeight,
+                document.documentElement.offsetHeight,
+                document.documentElement.clientHeight
+            );
+        """
+    )
+
+    print(f"    Full page size: {full_width}px × {full_height}px")
+
+    d = DEVICES[device_used]
+    viewport_width = d["width"]
+    viewport_height = d["height"]
+
+    print(f"    Viewport size: {viewport_width}px × {viewport_height}px")
+
+    driver.execute_cdp_cmd(
+        "Emulation.setDeviceMetricsOverride",
+        {
+            "width": viewport_width,
+            "height": viewport_height,
+            "deviceScaleFactor": d["deviceScaleFactor"],
+            "mobile": d["mobile"],
+            "screenWidth": viewport_width,
+            "screenHeight": viewport_height,
+            "positionX": 0,
+            "positionY": 0,
+        },
+    )
+    time.sleep(0.5)
+
+    # --- Take the screenshot ---
+    screenshot = driver.get_screenshot_as_png()
+    return screenshot
+
+
+def screenshot_scroll(device_input: str, url: str, driver) -> bytes:
+    print(f"\n--- Emulating device: {device_input} ---")
+    device_used = device_input
+    driver.get(url)
+    emulate_device(driver, device_used)
+
+    # Refresh so the site re-renders fully with the emulated device
+    driver.refresh()
+    time.sleep(3)
+
+    # --- Scroll to trigger all lazy-loaded content ---
+    scroll_pause = 0.4
+    scroll_step = 600
+    last_height = driver.execute_script("return document.body.scrollHeight")
+
+    while True:
+        current_pos = 0
+        while current_pos < last_height:
+            driver.execute_script(f"window.scrollTo(0, {current_pos});")
+            time.sleep(scroll_pause)
+            current_pos += scroll_step
+
+        time.sleep(1.5)
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
+    # --- Remove ad containers ---
+    driver.execute_script(
+        """
+        const adSelectors = [
+            'iframe',
+            '[id*="ad"]',       '[class*="ad"]',
+            '[id*="banner"]',   '[class*="banner"]',
+            '[id*="sponsor"]',  '[class*="sponsor"]',
+            '.advertisement',   '.adsbygoogle',
+            'ins.adsbygoogle'
+        ];
+        adSelectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => el.remove());
+        });
+    """
+    )
+
+    # --- Scroll back to top ---
+    driver.execute_script("window.scrollTo(0, 0);")
+    time.sleep(0.5)
+
+    # --- Measure true full page dimensions ---
+    full_width = driver.execute_script(
+        """
+        return Math.max(
+            document.body.scrollWidth,
+            document.body.offsetWidth,
+            document.documentElement.scrollWidth,
+            document.documentElement.offsetWidth,
+            document.documentElement.clientWidth
+        );
+    """
+    )
+    full_height = driver.execute_script(
+        """
+        return Math.max(
+            document.body.scrollHeight,
+            document.body.offsetHeight,
+            document.documentElement.scrollHeight,
+            document.documentElement.offsetHeight,
+            document.documentElement.clientHeight
+        );
+    """
+    )
+
+    print(f"    Full page size: {full_width}px × {full_height}px")
+
+    # --- KEY FIX: Use CDP override again instead of set_window_size ---
+    # set_window_size() conflicts with CDP emulation and causes clipping.
+    # Re-applying setDeviceMetricsOverride with the full page height
+    # tells the emulator to expand to the entire page without losing device context.
+
+    d = DEVICES[device_used]
+    driver.execute_cdp_cmd(
+        "Emulation.setDeviceMetricsOverride",
+        {
+            "width": d["width"],  # keep original device width
+            "height": full_height,  # expand to full page height
+            "deviceScaleFactor": d["deviceScaleFactor"],
+            "mobile": d["mobile"],
+            "screenWidth": d["width"],
+            "screenHeight": full_height,
+            "positionX": 0,
+            "positionY": 0,
+        },
+    )
+    time.sleep(0.5)
+
+    # --- Take the screenshot ---
+    screenshot = driver.get_screenshot_as_png()
+    return screenshot
 
 
 def capture_screenshot_mobile(url: str, output_path: str) -> str:
@@ -393,110 +511,19 @@ def capture_screenshot_mobile(url: str, output_path: str) -> str:
         "desktop_4k",
         "desktop_1920",
     ]
-    device_used = devices[0]
+    # device_used = devices[0]
     try:
-        driver.get(url)
-        emulate_device(driver, device_used)
+        for _device in devices:
+            # screenshot = screenshot_scroll(_device, url, driver)
+            screenshot = screenshot_no_scroll(_device, url, driver)
+            with open(f"{output_path}_{_device}.png", "wb") as file:
+                file.write(screenshot)
 
-        # Refresh so the site re-renders fully with the emulated device
-        driver.refresh()
-        time.sleep(3)
-
-        # --- Scroll to trigger all lazy-loaded content ---
-        scroll_pause = 0.4
-        scroll_step = 600
-        last_height = driver.execute_script("return document.body.scrollHeight")
-
-        while True:
-            current_pos = 0
-            while current_pos < last_height:
-                driver.execute_script(f"window.scrollTo(0, {current_pos});")
-                time.sleep(scroll_pause)
-                current_pos += scroll_step
-
-            time.sleep(1.5)
-            new_height = driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
-                break
-            last_height = new_height
-
-        # --- Remove ad containers ---
-        driver.execute_script(
-            """
-            const adSelectors = [
-                'iframe',
-                '[id*="ad"]',       '[class*="ad"]',
-                '[id*="banner"]',   '[class*="banner"]',
-                '[id*="sponsor"]',  '[class*="sponsor"]',
-                '.advertisement',   '.adsbygoogle',
-                'ins.adsbygoogle'
-            ];
-            adSelectors.forEach(sel => {
-                document.querySelectorAll(sel).forEach(el => el.remove());
-            });
-        """
-        )
-
-        # --- Scroll back to top ---
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(0.5)
-
-        # --- Measure true full page dimensions ---
-        full_width = driver.execute_script(
-            """
-            return Math.max(
-                document.body.scrollWidth,
-                document.body.offsetWidth,
-                document.documentElement.scrollWidth,
-                document.documentElement.offsetWidth,
-                document.documentElement.clientWidth
-            );
-        """
-        )
-        full_height = driver.execute_script(
-            """
-            return Math.max(
-                document.body.scrollHeight,
-                document.body.offsetHeight,
-                document.documentElement.scrollHeight,
-                document.documentElement.offsetHeight,
-                document.documentElement.clientHeight
-            );
-        """
-        )
-
-        print(f"    Full page size: {full_width}px × {full_height}px")
-
-        # --- KEY FIX: Use CDP override again instead of set_window_size ---
-        # set_window_size() conflicts with CDP emulation and causes clipping.
-        # Re-applying setDeviceMetricsOverride with the full page height
-        # tells the emulator to expand to the entire page without losing device context.
-
-        d = DEVICES[device_used]
-        driver.execute_cdp_cmd(
-            "Emulation.setDeviceMetricsOverride",
-            {
-                "width": d["width"],  # keep original device width
-                "height": full_height,  # expand to full page height
-                "deviceScaleFactor": d["deviceScaleFactor"],
-                "mobile": d["mobile"],
-                "screenWidth": d["width"],
-                "screenHeight": full_height,
-                "positionX": 0,
-                "positionY": 0,
-            },
-        )
-        time.sleep(0.5)
-
-        # --- Take the screenshot ---
-        screenshot = driver.get_screenshot_as_png()
-        with open(f"{output_path}_{device_used}.png", "wb") as file:
-            file.write(screenshot)
-
-        print(f"[✓] Full-page screenshot saved → {output_path}")
+            print(f"[✓] Full-page screenshot saved → {output_path}")
 
     finally:
         driver.quit()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2 – Resize to stay within model upload limits
@@ -534,59 +561,6 @@ def prepare_image(path: str, max_height: int = 6000, max_mb: float = 4.0) -> str
 def _to_base64(path: str) -> str:
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Step 3a – Groq backend  (Llama Vision, free cloud API)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def query_groq(
-    image_path: str,
-    query: str,
-    api_key: str,
-    model: str = GROQ_DEFAULT_MODEL,
-) -> str:
-    """
-    Send the screenshot to Groq's hosted Llama Vision endpoint.
-
-    Free-tier Groq models with vision support (pick via --groq-model):
-        meta-llama/llama-4-scout-17b-16e-instruct  (latest, default)
-        llama-3.2-11b-vision-preview               (lighter, fastest)
-        llama-3.2-90b-vision-preview               (most accurate)
-    """
-    Groq = _import_groq()
-    client = Groq(api_key=api_key)
-
-    print(f"{datetime.now()}, [2/3] Querying Groq ({model})...")
-    b64 = _to_base64(image_path)
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{b64}"},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"Query: {query}\n\n"
-                            "Extract the relevant information from this image."
-                        ),
-                    },
-                ],
-            },
-        ],
-        temperature=0.1,  # Low = factual / exact output
-        max_tokens=4096,  # Increase if you have a lot of content to extract (Groq supports up to 32k)
-        # max_tokens=8192,  # Increase if you have a lot of content to extract (Groq supports up to 32k)
-    )
-    return response.choices[0].message.content
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -629,9 +603,10 @@ def query_ollama(
                 "images": [b64],
             }
         ],
-        options={"temperature": 0.1},
+        options={"temperature": TEMPERATURE},
     )
     return response["message"]["content"]
+
 
 def query_ollama_cloud(
     image_path: str,
@@ -652,7 +627,7 @@ def query_ollama_cloud(
 
     client = Client(
         host="https://ollama.com",
-        headers={'Authorization': 'Bearer ' + os.environ.get('OLLAMA_API_KEY')}
+        headers={"Authorization": "Bearer " + os.environ.get("OLLAMA_API_KEY")},
     )
 
     if host != OLLAMA_DEFAULT_HOST:
@@ -660,20 +635,20 @@ def query_ollama_cloud(
 
     print(f"{datetime.now()}, [2/3] Querying Ollama (model={model}, host={host})...")
     b64 = _to_base64(image_path)
-    messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"{SYSTEM_PROMPT}\n\n"
-                    f"Query: {query}\n\n"
-                    "Extract the relevant information from the attached webpage screenshot."
-                ),
-                "images": [b64],
-            }
-        ]
+    messages = [
+        {
+            "role": "user",
+            "content": (
+                f"{SYSTEM_PROMPT}\n\n"
+                f"Query: {query}\n\n"
+                "Extract the relevant information from the attached webpage screenshot."
+            ),
+            "images": [b64],
+        }
+    ]
 
     for part in client.chat(model, messages=messages, stream=True):
-        print(part['message']['content'], end='', flush=True)
+        print(part["message"]["content"], end="", flush=True)
     # return response["message"]["content"]
 
 
@@ -686,8 +661,6 @@ def extract_from_webpage(
     url: str,
     query: str,
     backend: str = "ollama",
-    api_key: str | None = None,
-    groq_model: str = GROQ_DEFAULT_MODEL,
     ollama_model: str = OLLAMA_DEFAULT_MODEL,
     ollama_host: str = OLLAMA_DEFAULT_HOST,
     keep_screenshot: bool = False,
@@ -700,8 +673,6 @@ def extract_from_webpage(
         url:             Webpage URL to screenshot and analyse.
         query:           What to extract (natural language).
         backend:         "groq" (default, free cloud) or "ollama" (local).
-        api_key:         Groq API key – falls back to GROQ_API_KEY env var.
-        groq_model:      Override the Groq model name.
         ollama_model:    Override the Ollama model name.
         ollama_host:     Override the Ollama server URL.
         keep_screenshot: If True, keep the temp PNG on disk.
@@ -710,18 +681,8 @@ def extract_from_webpage(
         Extracted content as a Markdown string.
     """
     backend = backend.lower()
-    if backend not in ("groq", "ollama"):
+    if backend not in ("ollama", "ollama_cloud"):
         sys.exit(f"Unknown backend '{backend}'. Choose 'groq' or 'ollama'.")
-
-    if backend == "groq":
-        api_key = api_key or os.environ.get("GROQ_API_KEY")
-        if not api_key:
-            sys.exit(
-                "No Groq API key found.\n"
-                "  Get a free key : https://console.groq.com  (sign up -> API Keys)\n"
-                "  Set env var    : export GROQ_API_KEY=your_key\n"
-                "  Or pass        : --api-key your_key"
-            )
 
     # tmp_png_fp   = tempfile.mktemp(suffix="_webpage.png")
     tmp_png_fp = "data/webpage_analyser/v6/images/webpage.png"
@@ -729,19 +690,18 @@ def extract_from_webpage(
 
     # try:
     if not os.path.exists(tmp_png_fp):
-        # capture_screenshot_mobile(url, tmp_png_fp)
-        capture_screenshot_desktop(url, tmp_png_fp)
+        capture_screenshot_mobile(url, tmp_png_fp)
+        # capture_screenshot_desktop(url, tmp_png_fp)
+    # capture_screenshot_desktop(url, tmp_png_fp)
     if prepare_image_flg is True:
         print("Preparing image (resizing/compressing to fit model limits)...")
         ready_img = prepare_image(tmp_png_fp)
-    ready_img = tmp_png_fp
+    else:
+        print("Using raw image (no preparation)")
+        ready_img = tmp_png_fp
 
-    if backend == "groq":
-        markdown = query_groq(ready_img, query, api_key, model=groq_model)
-    elif backend == "ollama":
-        markdown = query_ollama(
-            ready_img, query, model=ollama_model, host=ollama_host
-        )
+    if backend == "ollama":
+        markdown = query_ollama(ready_img, query, model=ollama_model, host=ollama_host)
     elif backend == "ollama_cloud":
         markdown = query_ollama_cloud(
             ready_img, query, model=ollama_model, host=ollama_host
@@ -756,7 +716,7 @@ def extract_from_webpage(
             except Exception:
                 pass
 
-    print("{datetime.now()}, [3/3] Extraction complete.\n")
+    print(f"{datetime.now()}, [3/3] Extraction complete.\n")
     return markdown
 
 
@@ -771,15 +731,14 @@ def main(
     output_file: str,
     keep_screenshot: bool = False,
     prepare_image_flg: bool = False,
+    ollama_model: str = OLLAMA_DEFAULT_MODEL,
 ) -> None:
 
     result = extract_from_webpage(
         url=url_input,
         query=query_input,
         backend="ollama",
-        api_key=None,
-        groq_model=None,
-        ollama_model=OLLAMA_DEFAULT_MODEL,
+        ollama_model=ollama_model,
         ollama_host=OLLAMA_DEFAULT_HOST,
         keep_screenshot=keep_screenshot,
         prepare_image_flg=prepare_image_flg,
@@ -793,14 +752,43 @@ def main(
         Path(output_file).write_text(result, encoding="utf-8")
         print(f"\nSaved -> {output_file}")
 
+def run_app():
+    models = [
+        # "gemma3:12b",
+        "glm-ocr:bf16",
+        "granite3.2-vision:2b",
+        "llama3.2-vision:11b-instruct-q4_K_M",
+        "llama3.2-vision:11b",
+        "llava:13b",
+        "minicpm-v:8b",
+        "qwen3-vl:8b",
+        "gemma3:12b-it-q8_0",
+        "llava:7b-v1.6-mistral-q8_0",
+        "llama3.2-vision:11b-instruct-q4_K_M",
+        "qwen3-vl:8b-instruct-q8_0",
+        "llava-llama3:8b",
+        "gemma3:4b-it-fp16",
+        "gemma3:12b-it-qat",
+        "gemma3:12b-it-q4_K_M",
+        "qwen3-vl:4b-instruct-bf16",
+        "qwen3-vl:4b-thinking-bf16",
+        "qwen3-vl:8b-thinking-q8_0",
+        "gpt-oss:120b",
+    ]
+
+    # OLLAMA_DEFAULT_MODEL = "gpt-oss:120b-cloud"
+    # OLLAMA_DEFAULT_MODEL = "qwen3.5:397b-cloud"
+    # OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud" # Good but uses cloud
+    for _model in models:
+        clean_model_name = re.sub(r"[^A-Za-z0-9\-\.]", "_", _model)
+        main(
+            url_input=os.getenv("DEMO_URL_LINK"),
+            query_input=os.getenv("DEMO_URL_QUERY"),
+            output_file=f"data/webpage_analyser/v6/demo_output_free_image_{clean_model_name}.md",
+            keep_screenshot=True,
+            prepare_image_flg=False,
+            ollama_model=_model,
+        )
 
 if __name__ == "__main__":
-    clean_model_name = re.sub(r"[^A-Za-z0-9\-\.]", "_", OLLAMA_DEFAULT_MODEL)
-
-    main(
-        url_input=os.getenv("DEMO_URL_LINK"),
-        query_input=os.getenv("DEMO_URL_QUERY"),
-        output_file=f"data/webpage_analyser/v6/demo_output_free_image_{clean_model_name}.md",
-        keep_screenshot=True,
-        prepare_image_flg=True,
-    )
+    run_app()
