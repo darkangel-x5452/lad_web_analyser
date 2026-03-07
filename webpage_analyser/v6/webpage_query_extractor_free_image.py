@@ -62,6 +62,7 @@ from datetime import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -71,6 +72,8 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 
 from dotenv import load_dotenv
+
+from utils.tools import clean_directory_name, iso_to_date_string
 
 # from configs.screen_emulations.emulations import emulate_device
 
@@ -691,8 +694,8 @@ def extract_from_webpage(
     ready_img = tmp_png_fp
 
     # try:
-    if not os.path.exists(tmp_png_fp):
-        capture_screenshot_mobile(url, tmp_png_fp)
+    # if not os.path.exists(tmp_png_fp):
+    capture_screenshot_mobile(url, tmp_png_fp)
         # capture_screenshot_desktop(url, tmp_png_fp)
     # capture_screenshot_desktop(url, tmp_png_fp)
     if prepare_image_flg is True:
@@ -710,6 +713,17 @@ def extract_from_webpage(
         )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
+
+    try:
+        result = subprocess.run(
+            ["ollama", "stop", ollama_model],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print("Success:", result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("Error:", e.stderr)
 
     if not keep_screenshot:
         for p in {tmp_png_fp, ready_img}:
@@ -730,11 +744,10 @@ def extract_from_webpage(
 def main(
     url_input: str,
     query_input: str,
-    output_file: str,
     keep_screenshot: bool = False,
     prepare_image_flg: bool = False,
     ollama_model: str = OLLAMA_DEFAULT_MODEL,
-) -> None:
+) -> dict[str, str]:
 
     result = extract_from_webpage(
         url=url_input,
@@ -750,14 +763,14 @@ def main(
     print(result)
     print("─" * 70)
 
-    if output_file:
-        Path(output_file).write_text(result, encoding="utf-8")
-        print(f"\nSaved -> {output_file}")
+    # if output_file:
+    #     Path(output_file).write_text(result, encoding="utf-8")
+    #     print(f"\nSaved -> {output_file}")
     
     print("Load json output")
     output_jn = json.loads(result)
-    win_team = output_jn["win_team"]
-    lose_team = output_jn["lose_team"]
+    # win_team = output_jn["win_team"]
+    # lose_team = output_jn["lose_team"]
 
     result_jn = {
         "url": url_input,
@@ -766,13 +779,16 @@ def main(
     }
 
 
-    with open(f"data/webpage_analyser/v6/prod/{win_team}_vs_{lose_team}.json", "w", encoding="utf-8") as f:
-        json.dump(result_jn, f, ensure_ascii=False, indent=4)
-    print("bye")
+    # with open(f"data/webpage_analyser/v6/prod/{win_team}_vs_{lose_team}.json", "w", encoding="utf-8") as f:
+    #     json.dump(result_jn, f, ensure_ascii=False, indent=4)
+    return result_jn
 
 
 
-def run_app():
+def link_analyser_app(
+        link_input: str,
+        query_input: str,
+) -> dict[str, str]:
     models = [
         # "llama3.2-vision:11b-instruct-q4_K_M",  # 53.65, 29.17, 58.68, 40.24
         # "llama3.2-vision:11b",  # 38.56, 130.67, 100.29, 76.74
@@ -807,13 +823,13 @@ def run_app():
     # OLLAMA_DEFAULT_MODEL = "gpt-oss:120b-cloud"
     # OLLAMA_DEFAULT_MODEL = "qwen3.5:397b-cloud"
     # OLLAMA_DEFAULT_MODEL = "qwen3-vl:235b-cloud" # Good but uses cloud
+
     for _model in models:
         start_time = datetime.now()
-        clean_model_name = re.sub(r"[^A-Za-z0-9\-\.]", "_", _model)
-        main(
-            url_input=os.getenv("DEMO_URL_LINK"),
-            query_input=os.getenv("DEMO_URL_QUERY"),
-            output_file=f"data/webpage_analyser/v6/genai_markdowns/demo_output_free_image_{clean_model_name}.md",
+        # clean_model_name = re.sub(r"[^A-Za-z0-9\-\.]", "_", _model)
+        result_jn = main(
+            url_input=link_input,
+            query_input=query_input,
             keep_screenshot=True,
             prepare_image_flg=False,
             ollama_model=_model,
@@ -821,7 +837,11 @@ def run_app():
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         print(f"MODEL '{_model}' COMPLETED IN {duration:.2f} SECONDS.\n")
+    return result_jn
 
 
-if __name__ == "__main__":
-    run_app()
+# if __name__ == "__main__":
+#     link_analyser_app(
+#         url_input="",
+#         query_input="",
+#     )

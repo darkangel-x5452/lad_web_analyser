@@ -5,6 +5,9 @@ from urllib.parse import urljoin
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 from aiolimiter import AsyncLimiter
 
+from dotenv import load_dotenv
+load_dotenv()  # loads .env from current directory
+
 # Configuration
 API_KEY = os.environ["BRAVE_SEARCH_API_KEY"]
 API_HOST = "https://api.search.brave.com"
