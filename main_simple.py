@@ -46,16 +46,20 @@ class MainAppRunner:
                 "sport_name": sport_name,
                 "match_name": _match["match_name"],
             }
+            site_prefix = os.environ['LINK_QUERY_PREFIX']
+            context = "live coverage"
             if competition_name == "NCAA Basketball":
                 comp_url = "mens-college-basketball"
             elif competition_name == "NBA":
                 comp_url = "nba"
             elif competition_name == "NCAA Basketball Women":
                 comp_url = "womens-college-basketball"
+                # site_prefix = site_prefix.replace(".com", ".com.au")
+                # context = ""
             else:
                 _logger.warning(f"Unknown {sport_name} competition '{competition_name}' for match '{_match['match_name']}'. Skipping link search.")
                 continue
-            query = f"{os.environ['LINK_QUERY_PREFIX']}/{comp_url}/game/_/gameId/ live coverage {contestant_home} {contestant_away}"
+            query = f"{site_prefix}/{comp_url}/game/_/gameId/ {context} {contestant_away} {contestant_home}"
             counter = 0
             while counter < 3:
                 try:

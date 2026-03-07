@@ -788,6 +788,7 @@ def main(
 def link_analyser_app(
         link_input: str,
         query_input: str,
+        filename_context: str = None,
 ) -> dict[str, str]:
     models = [
         # "llama3.2-vision:11b-instruct-q4_K_M",  # 53.65, 29.17, 58.68, 40.24
